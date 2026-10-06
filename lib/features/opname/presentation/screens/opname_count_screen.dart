@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/back_header.dart';
@@ -109,19 +110,55 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
     // 2) Kode barang -> langsung ke detail.
     var matches = _items.where((e) => e.code.toLowerCase() == code).toList();
     if (_location != null) {
-      matches = matches.where((e) => e.location == _location).toList();
+      final inRack = matches.where((e) => e.location == _location).toList();
+      if (inRack.isNotEmpty) {
+        matches = inRack;
+      } else if (matches.isNotEmpty) {
+        // barang ada, tapi di rak lain: tanya dulu sebelum pindah.
+        final go = await _confirmOtherRack(matches);
+        if (go != true || !mounted) return;
+        setState(() => _location = null); // lepas filter rak, biar bisa buka detail barang di rak lain
+      }
     }
 
     if (matches.isEmpty) {
-      _showMessage(_location == null
-          ? 'Kode "$raw" tidak ada di daftar.'
-          : 'Kode "$raw" tidak ada di rak $_location.');
+      _showMessage(
+        _location == null
+            ? 'Kode "$raw" tidak ada di daftar.'
+            : 'Kode "$raw" tidak ada di rak $_location.',
+      );
       return;
     }
 
-    final item = matches.length == 1 ? matches.first : await _pickLocation(matches);
+    final item = matches.length == 1
+        ? matches.first
+        : await _pickLocation(matches);
     if (item == null || !mounted) return;
     await _openDetail(item);
+  }
+
+  Future<bool?> _confirmOtherRack(List<OpnameItem> matches) {
+    final racks = matches.map((e) => e.location).join('\n');
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Barang ada di rak lain'),
+        content: Text(
+          '${matches.first.code} tidak ada di rak $_location. \n\n'
+          'Ada di:\n$racks\n\nTetep buka?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Tetep buka'),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<void> _openDetail(OpnameItem item) async {
@@ -173,8 +210,10 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
             ),
             for (final o in options)
               ListTile(
-                leading:
-                    const Icon(Icons.place_outlined, color: AppColors.primary),
+                leading: const Icon(
+                  Icons.place_outlined,
+                  color: AppColors.primary,
+                ),
                 title: Text(o.location, style: AppTextStyles.body),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.pop(ctx, o),
@@ -258,8 +297,9 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
             tooltip: _cameraOn ? 'Tutup kamera' : 'Buka kamera',
             onPressed: _toggleCamera,
             style: IconButton.styleFrom(
-              backgroundColor:
-                  _cameraOn ? AppColors.primary : AppColors.primarySoft,
+              backgroundColor: _cameraOn
+                  ? AppColors.primary
+                  : AppColors.primarySoft,
             ),
             icon: Icon(
               Icons.qr_code_scanner,
@@ -345,7 +385,10 @@ class _ScanStepBanner extends StatelessWidget {
   final String? location;
   final VoidCallback onClearLocation;
 
-  const _ScanStepBanner({required this.location, required this.onClearLocation});
+  const _ScanStepBanner({
+    required this.location,
+    required this.onClearLocation,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -359,8 +402,11 @@ class _ScanStepBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(hasRack ? Icons.sell_outlined : Icons.warehouse_outlined,
-              color: AppColors.primary, size: 22),
+          Icon(
+            hasRack ? Icons.sell_outlined : Icons.warehouse_outlined,
+            color: AppColors.primary,
+            size: 22,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -368,15 +414,15 @@ class _ScanStepBanner extends StatelessWidget {
               children: [
                 Text(
                   hasRack ? 'Scan barang di rak ini' : 'Scan rak atau barang',
-                  style: AppTextStyles.bodyBold
-                      .copyWith(color: AppColors.primary),
+                  style: AppTextStyles.bodyBold.copyWith(
+                    color: AppColors.primary,
+                  ),
                 ),
                 Text(
-                  hasRack
-                      ? location!
-                      : 'Scan rak untuk lihat isinya, scan barang untuk langsung hitung',
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
+                  hasRack ? location! : 'Scan rak untuk lihat isinya, scan barang untuk langsung hitung',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
