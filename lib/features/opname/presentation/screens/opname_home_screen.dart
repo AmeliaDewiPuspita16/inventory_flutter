@@ -2,10 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/hero_header.dart';
+import '../../../../core/widgets/scan_badge.dart';
 import '../../data/dummy/opname_dummy.dart';
 import 'opname_count_screen.dart';
 
-/// Halaman pertama (versi 2): header hijau besar, tombol scan bulat di tengah,
+/// Halaman pertama (versi 2): header abu-hijau, tombol scan bulat di tengah,
 /// lalu panduan 4 langkah. Satu ketukan membuka kamera.
 class OpnameHomeScreen extends StatelessWidget {
   const OpnameHomeScreen({super.key});
@@ -46,11 +48,7 @@ class OpnameHomeScreen extends StatelessWidget {
     final rackCount = dummyOpnameItems.map((e) => e.location).toSet().length;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
-      value: const SystemUiOverlayStyle(
-        statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
-        statusBarBrightness: Brightness.dark,
-      ),
+      value: HeroHeader.overlayStyle,
       child: Scaffold(
         body: SingleChildScrollView(
           child: Column(
@@ -61,56 +59,41 @@ class OpnameHomeScreen extends StatelessWidget {
                 children: [
                   Padding(
                     padding: const EdgeInsets.only(bottom: 48),
-                    child: Container(
-                    width: double.infinity,
-                    padding: EdgeInsets.fromLTRB(
-                      24,
-                      MediaQuery.of(context).padding.top + 28,
-                      24,
-                      76,
-                    ),
-                    decoration: const BoxDecoration(
-                      gradient: LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [AppColors.primary, AppColors.primaryDark],
+                    child: HeroHeader(
+                      padding: const EdgeInsets.fromLTRB(24, 28, 24, 64),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Hitung Inventaris',
+                            style: AppTextStyles.title.copyWith(
+                                fontSize: 26, fontWeight: FontWeight.w600),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            'Cek stok fisik dengan scan barcode.',
+                            style: AppTextStyles.body
+                                .copyWith(color: AppColors.textSecondary),
+                          ),
+                          const SizedBox(height: 18),
+                          Row(
+                            children: [
+                              _StatChip(
+                                  icon: Icons.inventory_2_outlined,
+                                  label: '$itemCount barang'),
+                              const SizedBox(width: 8),
+                              _StatChip(
+                                  icon: Icons.place_outlined,
+                                  label: '$rackCount rak'),
+                            ],
+                          ),
+                        ],
                       ),
-                      borderRadius:
-                          BorderRadius.vertical(bottom: Radius.circular(32)),
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Hitung Inventaris',
-                          style: AppTextStyles.headerTitle
-                              .copyWith(fontSize: 26, fontWeight: FontWeight.w600),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          'Cek stok fisik dengan scan barcode.',
-                          style: AppTextStyles.body
-                              .copyWith(color: Colors.white70),
-                        ),
-                        const SizedBox(height: 18),
-                        Row(
-                          children: [
-                            _StatChip(
-                                icon: Icons.inventory_2_outlined,
-                                label: '$itemCount barang'),
-                            const SizedBox(width: 8),
-                            _StatChip(
-                                icon: Icons.place_outlined,
-                                label: '$rackCount rak'),
-                          ],
-                        ),
-                      ],
-                    ),
                     ),
                   ),
                   Positioned(
                     bottom: 0,
-                    child: _ScanButton(onTap: () => _start(context)),
+                    child: ScanBadge(onTap: () => _start(context)),
                   ),
                 ],
               ),
@@ -168,39 +151,6 @@ class OpnameHomeScreen extends StatelessWidget {
   }
 }
 
-class _ScanButton extends StatelessWidget {
-  final VoidCallback onTap;
-
-  const _ScanButton({required this.onTap});
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.surface,
-      shape: const CircleBorder(),
-      elevation: 6,
-      shadowColor: Colors.black38,
-      child: InkWell(
-        customBorder: const CircleBorder(),
-        onTap: onTap,
-        child: Padding(
-          padding: const EdgeInsets.all(8),
-          child: Container(
-            width: 80,
-            height: 80,
-            decoration: const BoxDecoration(
-              color: AppColors.primarySoft,
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.qr_code_scanner_rounded,
-                size: 40, color: AppColors.primary),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _StatChip extends StatelessWidget {
   final IconData icon;
   final String label;
@@ -212,19 +162,19 @@ class _StatChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.16),
+        color: Colors.white.withOpacity(0.7),
         borderRadius: BorderRadius.circular(20),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(icon, size: 15, color: Colors.white),
+          Icon(icon, size: 15, color: AppColors.primary),
           const SizedBox(width: 6),
           Text(label,
               style: const TextStyle(
                   fontSize: 13,
                   fontWeight: FontWeight.w500,
-                  color: Colors.white)),
+                  color: AppColors.primary)),
         ],
       ),
     );

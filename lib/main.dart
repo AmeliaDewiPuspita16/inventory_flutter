@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'core/theme/app_theme.dart';
-import 'features/opname/presentation/screens/opname_home_screen.dart';
+import 'features/auth/presentation/screens/login_screen.dart';
 
 void main() {
   runApp(const InventoryApp());
@@ -15,7 +15,7 @@ class InventoryApp extends StatelessWidget {
       title: 'Inventory',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
-      home: const OpnameHomeScreen(),
+      home: const LoginScreen(),
     );
   }
 }

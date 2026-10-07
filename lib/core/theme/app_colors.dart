@@ -12,6 +12,10 @@ class AppColors {
   static const Color border = Color(0xFFE2DFD8);
   static const Color inputBorder = Color(0xFFD9D6CF);
 
+  // Gradasi header halaman login (abu-hijau lembut)
+  static const Color heroTop = Color(0xFFC3CEC6);
+  static const Color heroBottom = Color(0xFFDFE4DD);
+
   static const Color textPrimary = Color(0xFF1C1C1A);
   static const Color textSecondary = Color(0xFF5F5D57);
   static const Color textMuted = Color(0xFF77756F);
