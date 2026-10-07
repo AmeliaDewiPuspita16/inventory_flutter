@@ -371,7 +371,7 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
         ),
         child: SafeArea(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 24),
             child: Row(
               children: [
                 Expanded(
