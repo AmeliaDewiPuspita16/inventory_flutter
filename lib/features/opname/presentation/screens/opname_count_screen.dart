@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/back_header.dart';
@@ -8,6 +9,7 @@ import '../../data/dummy/opname_dummy.dart';
 import '../../domain/entities/opname_item.dart';
 import '../widgets/opname_line_tile.dart';
 import '../widgets/scanner_panel.dart';
+import '../widgets/code_search_sheet.dart';
 import 'opname_detail_screen.dart';
 
 /// Layar kamera + daftar barang.
@@ -121,13 +123,17 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
     }
 
     if (matches.isEmpty) {
-      _showMessage(_location == null
-          ? 'Kode "$raw" tidak ada di daftar.'
-          : 'Kode "$raw" tidak ada di rak $_location.');
+      _showMessage(
+        _location == null
+            ? 'Kode "$raw" tidak ada di daftar.'
+            : 'Kode "$raw" tidak ada di rak $_location.',
+      );
       return;
     }
 
-    final item = matches.length == 1 ? matches.first : await _pickLocation(matches);
+    final item = matches.length == 1
+        ? matches.first
+        : await _pickLocation(matches);
     if (item == null || !mounted) return;
     await _openDetail(item);
   }
@@ -205,8 +211,10 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
             ),
             for (final o in options)
               ListTile(
-                leading:
-                    const Icon(Icons.place_outlined, color: AppColors.primary),
+                leading: const Icon(
+                  Icons.place_outlined,
+                  color: AppColors.primary,
+                ),
                 title: Text(o.location, style: AppTextStyles.body),
                 trailing: const Icon(Icons.chevron_right),
                 onTap: () => Navigator.pop(ctx, o),
@@ -217,34 +225,25 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
     );
   }
 
-  /// Tombol "Tambah Barang": ketik kode barang/rak secara manual,
-  /// diproses sama persis seperti hasil scan.
+  /// Tombol "Input kode": buka pencarian rak/barang.
   Future<void> _manualInput() async {
-    final text = TextEditingController();
-    final code = await showDialog<String>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Input kode manual'),
-        content: TextField(
-          controller: text,
-          autofocus: true,
-          textCapitalization: TextCapitalization.characters,
-          decoration: const InputDecoration(hintText: 'Contoh: MLKPL009'),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Batal'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, text.text.trim()),
-            child: const Text('OK'),
-          ),
-        ],
-      ),
-    );
-    text.dispose();
-    if (code != null && code.isNotEmpty && mounted) _onCode(code);
+    // Cegah scan kamera memicu aksi lain selama sheet terbuka.
+    _busy = true;
+    final result = await showCodeSearchSheet(context, items: _items);
+    _busy = false;
+
+    if (result == null || !mounted) return;
+
+    if (result.rack != null) {
+      // Pilih rak: daftar difilter ke rak itu (sama seperti scan rak).
+      setState(() => _location = result.rack);
+    } else if (result.item != null) {
+      // Pilih barang: langsung buka detail barang yang tepat.
+      await _openDetail(result.item!);
+    } else if (result.rawCode != null) {
+      // Enter di keyboard: proses seperti hasil scan.
+      _onCode(result.rawCode!);
+    }
   }
 
   // ------------------------------------------------------------- confirm
@@ -290,8 +289,9 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
             tooltip: _cameraOn ? 'Tutup kamera' : 'Buka kamera',
             onPressed: _toggleCamera,
             style: IconButton.styleFrom(
-              backgroundColor:
-                  _cameraOn ? AppColors.primary : AppColors.primarySoft,
+              backgroundColor: _cameraOn
+                  ? AppColors.primary
+                  : AppColors.primarySoft,
             ),
             icon: Icon(
               Icons.qr_code_scanner,
@@ -330,7 +330,8 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
                         child: IgnorePointer(
                           child: Center(
                             child: _CameraChip(
-                                label: 'Arahkan ke barcode atau QR'),
+                              label: 'Arahkan ke barcode atau QR',
+                            ),
                           ),
                         ),
                       ),
@@ -401,7 +402,10 @@ class _ScanStepBanner extends StatelessWidget {
   final String? location;
   final VoidCallback onClearLocation;
 
-  const _ScanStepBanner({required this.location, required this.onClearLocation});
+  const _ScanStepBanner({
+    required this.location,
+    required this.onClearLocation,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -415,8 +419,11 @@ class _ScanStepBanner extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Icon(hasRack ? Icons.sell_outlined : Icons.warehouse_outlined,
-              color: AppColors.primary, size: 22),
+          Icon(
+            hasRack ? Icons.sell_outlined : Icons.warehouse_outlined,
+            color: AppColors.primary,
+            size: 22,
+          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -424,15 +431,15 @@ class _ScanStepBanner extends StatelessWidget {
               children: [
                 Text(
                   hasRack ? 'Scan barang di rak ini' : 'Scan rak atau barang',
-                  style: AppTextStyles.bodyBold
-                      .copyWith(color: AppColors.primary),
+                  style: AppTextStyles.bodyBold.copyWith(
+                    color: AppColors.primary,
+                  ),
                 ),
                 Text(
-                  hasRack
-                      ? location!
-                      : 'Scan rak untuk lihat isinya, scan barang untuk langsung hitung',
-                  style: AppTextStyles.caption
-                      .copyWith(color: AppColors.textSecondary),
+                  hasRack ? location! : 'Scan rak untuk lihat isinya, scan barang untuk langsung hitung',
+                  style: AppTextStyles.caption.copyWith(
+                    color: AppColors.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -492,8 +499,10 @@ class _CameraChip extends StatelessWidget {
             Icon(icon, size: 14, color: Colors.white),
             const SizedBox(width: 5),
           ],
-          Text(label,
-              style: const TextStyle(fontSize: 12, color: Colors.white)),
+          Text(
+            label,
+            style: const TextStyle(fontSize: 12, color: Colors.white),
+          ),
         ],
       ),
     );

@@ -7,7 +7,7 @@ import '../../../../core/widgets/scan_badge.dart';
 import '../../data/dummy/opname_dummy.dart';
 import 'opname_count_screen.dart';
 
-/// Halaman pertama (versi 2): header abu-hijau, tombol scan bulat di tengah,
+/// Halaman pertama: header abu-hijau, tombol scan bulat di tengah,
 /// lalu panduan 4 langkah. Satu ketukan membuka kamera.
 class OpnameHomeScreen extends StatelessWidget {
   const OpnameHomeScreen({super.key});
