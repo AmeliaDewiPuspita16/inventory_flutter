@@ -9,7 +9,7 @@ import '../../../../core/widgets/field_label_row.dart';
 /// Form login tanpa kartu: langsung duduk di atas latar krem halaman.
 /// Tidak menyimpan state: semua nilai dan aksi dikirim dari [LoginScreen].
 class LoginFormCard extends StatelessWidget {
-  final TextEditingController usernameController;
+  final TextEditingController emailController;
   final TextEditingController passwordController;
   final bool obscurePassword;
   final VoidCallback onToggleObscure;
@@ -17,15 +17,20 @@ class LoginFormCard extends StatelessWidget {
   final VoidCallback onChanged;
   final String? errorText;
 
+  /// True selama request login berjalan: tombol dinonaktifkan supaya
+  /// user tidak menekan dua kali.
+  final bool isLoading;
+
   const LoginFormCard({
     super.key,
-    required this.usernameController,
+    required this.emailController,
     required this.passwordController,
     required this.obscurePassword,
     required this.onToggleObscure,
     required this.onSubmit,
     required this.onChanged,
     this.errorText,
+    this.isLoading = false,
   });
 
   @override
@@ -33,13 +38,14 @@ class LoginFormCard extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const FieldLabelRow(label: 'Username'),
+        const FieldLabelRow(label: 'Email'),
         AppTextField(
-          controller: usernameController,
-          hint: 'Enter your username',
-          prefixIcon: Icons.person_outline,
+          controller: emailController,
+          hint: 'Enter your email',
+          prefixIcon: Icons.mail_outline,
+          keyboardType: TextInputType.emailAddress,
           textInputAction: TextInputAction.next,
-          autofillHints: const [AutofillHints.username],
+          autofillHints: const [AutofillHints.email],
           onChanged: (_) => onChanged(),
         ),
         const SizedBox(height: 16),
@@ -52,11 +58,9 @@ class LoginFormCard extends StatelessWidget {
           textInputAction: TextInputAction.done,
           autofillHints: const [AutofillHints.password],
           onChanged: (_) => onChanged(),
-          onSubmitted: (_) => onSubmit(),
+          onSubmitted: (_) => isLoading ? null : onSubmit(),
           suffixIcon: IconButton(
-            tooltip: obscurePassword
-                ? 'Show password'
-                : 'Hide password',
+            tooltip: obscurePassword ? 'Show password' : 'Hide password',
             onPressed: onToggleObscure,
             icon: Icon(
               obscurePassword
@@ -77,7 +81,11 @@ class LoginFormCard extends StatelessWidget {
           ),
         ],
         const SizedBox(height: 24),
-        AppButton(label: 'Sign in', onPressed: onSubmit),
+        AppButton(
+          label: isLoading ? 'Signing in...' : 'Sign in',
+          // onPressed null = tombol otomatis nonaktif.
+          onPressed: isLoading ? null : onSubmit,
+        ),
       ],
     );
   }
