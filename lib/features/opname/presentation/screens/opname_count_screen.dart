@@ -1,11 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
 
+import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
 import '../../../../core/widgets/back_header.dart';
-import '../../data/dummy/opname_dummy.dart';
+import '../../../auth/presentation/bloc/auth/auth_bloc.dart';
+import '../../data/opname_repository.dart';
 import '../../domain/entities/opname_item.dart';
 import '../widgets/opname_line_tile.dart';
 import '../widgets/scanner_panel.dart';
@@ -33,16 +36,55 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
     facing: CameraFacing.back,
   );
 
-  List<OpnameItem> _items = List.of(dummyOpnameItems);
+  /// Kalau true, hitungan langsung dikonfirmasi di server dan MENGUBAH STOK
+  /// (tidak bisa dibatalkan). Kalau false, hanya disimpan sebagai draft dan
+  /// dikonfirmasi lewat portal. Ubah ke true setelah alur ini teruji.
+  static const bool _confirmOnSubmit = false;
+
+  List<OpnameItem> _items = const [];
+  List<OpnameRack> _racks = const [];
   String? _location; // rak yang sedang aktif (hasil scan rak)
   bool _cameraOn = true;
   bool _busy = false; // true selama kode sedang diproses / detail terbuka
+  bool _loading = true;
+  bool _submitting = false;
+  String? _loadError;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     WidgetsBinding.instance.addPostFrameCallback((_) => _startCamera());
+    _load();
+  }
+
+  // ---------------------------------------------------------------- data
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _loadError = null;
+    });
+    final repo = context.read<OpnameRepository>();
+    try {
+      final items = await repo.fetchCountableItems();
+      // Daftar rak hanya pelengkap (untuk mengenali kode rak). Kalau gagal,
+      // scan rak tetap jalan lewat label lokasi.
+      final racks = await repo.fetchRacks().catchError((_) => <OpnameRack>[]);
+      if (!mounted) return;
+      setState(() {
+        _items = items;
+        _racks = racks;
+        _location = null;
+        _loading = false;
+      });
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loadError = e.message;
+        _loading = false;
+      });
+    }
   }
 
   @override
@@ -85,7 +127,7 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
   // ---------------------------------------------------------------- scan
 
   Future<void> _onCode(String raw) async {
-    if (_busy) return;
+    if (_busy || _loading || _submitting || _loadError != null) return;
     _busy = true;
     HapticFeedback.mediumImpact();
     try {
@@ -99,10 +141,26 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
     final code = raw.trim().toLowerCase();
 
     // 1) Kode rak/lokasi -> filter daftar ke rak itu.
-    final rack = _items
+    //    Cocok dengan label lokasi persis, atau dengan kode rak dari server
+    //    (mis. "PUT00003"). Untuk kode rak, cari baris yang ada di rak itu.
+    var rack = _items
         .where((e) => e.location.toLowerCase() == code)
         .map((e) => e.location)
         .firstOrNull;
+    if (rack == null) {
+      final putaway =
+          _racks.where((r) => r.code.toLowerCase() == code).firstOrNull;
+      if (putaway != null) {
+        rack = _items
+            .where((e) => e.putawayId == putaway.id)
+            .map((e) => e.location)
+            .firstOrNull;
+        if (rack == null) {
+          _showMessage('Rak ${putaway.text} belum ada barangnya.');
+          return;
+        }
+      }
+    }
     if (rack != null) {
       setState(() => _location = rack);
       return;
@@ -250,14 +308,61 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
 
   int get _countedTotal => _items.where((e) => e.isCounted).length;
 
-  void _confirm() {
-    final done = _countedTotal;
-    if (done == 0) return;
-    setState(() {
-      _items = List.of(dummyOpnameItems);
-      _location = null;
-    });
-    _showMessage('$done item dikonfirmasi. Data contoh.');
+  Future<void> _confirm() async {
+    final counted = _items.where((e) => e.isCounted).toList();
+    if (counted.isEmpty || _submitting) return;
+
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_confirmOnSubmit ? 'Konfirmasi hitungan?' : 'Simpan hitungan?'),
+        content: Text(
+          _confirmOnSubmit
+              ? '${counted.length} item akan dikonfirmasi. Stok sistem '
+                  'akan diubah sesuai hitungan dan tidak bisa dibatalkan.'
+              : '${counted.length} item akan disimpan sebagai draft. '
+                  'Stok sistem belum berubah sampai dikonfirmasi di portal.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: Text(_confirmOnSubmit ? 'Konfirmasi' : 'Simpan'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+
+    final repo = context.read<OpnameRepository>();
+    final countedBy =
+        context.read<AuthBloc>().state.session?.user.name ?? 'Mobile';
+
+    setState(() => _submitting = true);
+    try {
+      await repo.submit(
+        counted: counted,
+        countedBy: countedBy,
+        confirm: _confirmOnSubmit,
+        notes: 'Dari aplikasi mobile',
+      );
+      if (!mounted) return;
+      _showMessage(
+        _confirmOnSubmit
+            ? '${counted.length} item dikonfirmasi.'
+            : '${counted.length} item disimpan sebagai draft.',
+      );
+      setState(() => _submitting = false);
+      await _load(); // muat ulang: hitungan sudah terkirim
+    } on ApiException catch (e) {
+      if (!mounted) return;
+      setState(() => _submitting = false);
+      // Hitungan di layar dipertahankan supaya bisa dicoba kirim lagi.
+      _showMessage(e.message);
+    }
   }
 
   void _showMessage(String text) {
@@ -345,7 +450,15 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
             onClearLocation: () => setState(() => _location = null),
           ),
           Expanded(
-            child: ListView(
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _loadError != null
+                    ? _LoadError(message: _loadError!, onRetry: _load)
+                    : _items.isEmpty
+                        ? const Center(
+                            child: Text('Belum ada barang yang bisa dihitung.'),
+                          )
+                        : ListView(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
               children: [
                 for (final entry in groups.entries) ...[
@@ -376,7 +489,7 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
-                    onPressed: _manualInput,
+                    onPressed: _loading || _loadError != null ? null : _manualInput,
                     icon: const Icon(Icons.keyboard_outlined, size: 20),
                     label: const Text('Input kode'),
                   ),
@@ -384,8 +497,19 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: _countedTotal == 0 ? null : _confirm,
-                    child: Text('Konfirmasi ($_countedTotal)'),
+                    onPressed:
+                        _countedTotal == 0 || _submitting ? null : _confirm,
+                    child: _submitting
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : Text(
+                            _confirmOnSubmit
+                                ? 'Konfirmasi ($_countedTotal)'
+                                : 'Simpan ($_countedTotal)',
+                          ),
                   ),
                 ),
               ],
@@ -504,6 +628,33 @@ class _CameraChip extends StatelessWidget {
             style: const TextStyle(fontSize: 12, color: Colors.white),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _LoadError extends StatelessWidget {
+  final String message;
+  final VoidCallback onRetry;
+
+  const _LoadError({required this.message, required this.onRetry});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off_outlined,
+                size: 40, color: AppColors.textMuted),
+            const SizedBox(height: 12),
+            Text(message, textAlign: TextAlign.center),
+            const SizedBox(height: 12),
+            OutlinedButton(onPressed: onRetry, child: const Text('Coba lagi')),
+          ],
+        ),
       ),
     );
   }

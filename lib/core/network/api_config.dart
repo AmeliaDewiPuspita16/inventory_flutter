@@ -20,4 +20,9 @@ class ApiConfig {
 
   static const String login = '/api/login';
   static const String logout = '/api/logout';
+
+  static const String opnameBase =
+      '/api/portal/apps/inventory/estate-material/stock-opname';
+  static const String opnameOptions = '$opnameBase/options';
+  static const String opnameCountableItems = '$opnameBase/countable-items';
 }
