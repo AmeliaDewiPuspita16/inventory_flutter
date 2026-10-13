@@ -6,6 +6,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import '../../../../core/network/api_exception.dart';
 import '../../../../core/theme/app_colors.dart';
 import '../../../../core/theme/app_text_styles.dart';
+import '../../../../core/widgets/app_chip_row.dart';
 import '../../../../core/widgets/back_header.dart';
 import '../../../auth/presentation/bloc/auth/auth_bloc.dart';
 import '../../data/opname_repository.dart';
@@ -48,6 +49,7 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
   bool _busy = false; // true selama kode sedang diproses / detail terbuka
   bool _loading = true;
   bool _submitting = false;
+  int _filter = 0; // 0 semua, 1 belum dihitung, 2 sudah dihitung
   String? _loadError;
 
   @override
@@ -380,10 +382,38 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
         ? _items
         : _items.where((e) => e.location == _location).toList();
 
-    // Kelompokkan per lokasi (urutan kemunculan dipertahankan).
-    final groups = <String, List<OpnameItem>>{};
+    final visibleCounted = visible.where((e) => e.isCounted).length;
+    final shown = switch (_filter) {
+      1 => visible.where((e) => !e.isCounted).toList(),
+      2 => visible.where((e) => e.isCounted).toList(),
+      _ => visible,
+    };
+
+    // Jumlah per lokasi (tanpa filter) untuk header grup: "3/20 dihitung".
+    final groupTotal = <String, int>{};
+    final groupDone = <String, int>{};
     for (final e in visible) {
-      groups.putIfAbsent(e.location, () => []).add(e);
+      groupTotal[e.location] = (groupTotal[e.location] ?? 0) + 1;
+      if (e.isCounted) {
+        groupDone[e.location] = (groupDone[e.location] ?? 0) + 1;
+      }
+    }
+
+    // Ratakan jadi satu daftar (header lokasi + barang) supaya ListView
+    // hanya membangun kartu yang sedang terlihat. Urutan kemunculan lokasi
+    // dipertahankan.
+    final rows = <Object>[];
+    String? lastLocation;
+    for (final e in shown) {
+      if (e.location != lastLocation) {
+        rows.add(_GroupRow(
+          e.location,
+          groupDone[e.location] ?? 0,
+          groupTotal[e.location] ?? 0,
+        ));
+        lastLocation = e.location;
+      }
+      rows.add(e);
     }
 
     return Scaffold(
@@ -447,8 +477,24 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
             ),
           _ScanStepBanner(
             location: _location,
+            counted: visibleCounted,
+            total: visible.length,
             onClearLocation: () => setState(() => _location = null),
           ),
+          if (!_loading && _loadError == null && _items.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 4, 16, 4),
+              child: AppChipRow(
+                soft: true,
+                labels: [
+                  'Semua (${visible.length})',
+                  'Belum (${visible.length - visibleCounted})',
+                  'Sudah ($visibleCounted)',
+                ],
+                selectedIndex: _filter,
+                onChanged: (i) => setState(() => _filter = i),
+              ),
+            ),
           Expanded(
             child: _loading
                 ? const Center(child: CircularProgressIndicator())
@@ -458,22 +504,33 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
                         ? const Center(
                             child: Text('Belum ada barang yang bisa dihitung.'),
                           )
-                        : ListView(
-              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-              children: [
-                for (final entry in groups.entries) ...[
-                  _LocationHeader(name: entry.key, count: entry.value.length),
-                  for (final item in entry.value)
-                    Padding(
-                      padding: const EdgeInsets.only(bottom: 10),
-                      child: OpnameLineTile(
-                        item: item,
-                        onEdit: () => _openDetail(item),
-                      ),
-                    ),
-                ],
-              ],
-            ),
+                        : rows.isEmpty
+                            ? const Center(
+                                child: Text('Tidak ada barang pada filter ini.'),
+                              )
+                            : ListView.builder(
+                                padding:
+                                    const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                                itemCount: rows.length,
+                                itemBuilder: (_, i) {
+                                  final row = rows[i];
+                                  if (row is _GroupRow) {
+                                    return _LocationHeader(
+                                      name: row.name,
+                                      counted: row.counted,
+                                      total: row.total,
+                                    );
+                                  }
+                                  final item = row as OpnameItem;
+                                  return Padding(
+                                    padding: const EdgeInsets.only(bottom: 8),
+                                    child: OpnameLineTile(
+                                      item: item,
+                                      onEdit: () => _openDetail(item),
+                                    ),
+                                  );
+                                },
+                              ),
           ),
         ],
       ),
@@ -521,80 +578,134 @@ class _OpnameCountScreenState extends State<OpnameCountScreen>
   }
 }
 
-/// Penunjuk langkah: "Scan rak" dulu (opsional), lalu "Scan barang".
+/// Penunjuk langkah + progres: "Scan rak" dulu (opsional), lalu "Scan barang".
+/// Di bawahnya ada bar progres jumlah barang yang sudah dihitung.
 class _ScanStepBanner extends StatelessWidget {
   final String? location;
+  final int counted;
+  final int total;
   final VoidCallback onClearLocation;
 
   const _ScanStepBanner({
     required this.location,
+    required this.counted,
+    required this.total,
     required this.onClearLocation,
   });
 
   @override
   Widget build(BuildContext context) {
     final hasRack = location != null;
+    final progress = total == 0 ? 0.0 : counted / total;
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
-      padding: const EdgeInsets.fromLTRB(14, 10, 8, 10),
+      padding: const EdgeInsets.fromLTRB(14, 10, 8, 12),
       decoration: BoxDecoration(
         color: AppColors.primarySoft,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Icon(
-            hasRack ? Icons.sell_outlined : Icons.warehouse_outlined,
-            color: AppColors.primary,
-            size: 22,
+          Row(
+            children: [
+              Icon(
+                hasRack ? Icons.sell_outlined : Icons.warehouse_outlined,
+                color: AppColors.primary,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      hasRack ? 'Scan barang di rak ini' : 'Scan rak atau barang',
+                      style: AppTextStyles.bodyBold.copyWith(
+                        color: AppColors.primary,
+                      ),
+                    ),
+                    Text(
+                      hasRack
+                          ? location!
+                          : 'Rak untuk lihat isinya, barang untuk langsung hitung',
+                      style: AppTextStyles.caption.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (hasRack)
+                TextButton(
+                  onPressed: onClearLocation,
+                  child: const Text('Semua rak'),
+                ),
+            ],
           ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 10),
+          Padding(
+            padding: const EdgeInsets.only(right: 6),
+            child: Row(
               children: [
-                Text(
-                  hasRack ? 'Scan barang di rak ini' : 'Scan rak atau barang',
-                  style: AppTextStyles.bodyBold.copyWith(
-                    color: AppColors.primary,
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(4),
+                    child: LinearProgressIndicator(
+                      value: progress,
+                      minHeight: 6,
+                      backgroundColor: Colors.white,
+                      color: AppColors.primary,
+                    ),
                   ),
                 ),
+                const SizedBox(width: 10),
                 Text(
-                  hasRack ? location! : 'Scan rak untuk lihat isinya, scan barang untuk langsung hitung',
+                  '$counted/$total dihitung',
                   style: AppTextStyles.caption.copyWith(
-                    color: AppColors.textSecondary,
+                    color: AppColors.primary,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],
             ),
           ),
-          if (hasRack)
-            TextButton(
-              onPressed: onClearLocation,
-              child: const Text('Semua rak'),
-            ),
         ],
       ),
     );
   }
 }
 
+/// Satu baris penanda grup lokasi di daftar yang sudah diratakan.
+class _GroupRow {
+  final String name;
+  final int counted;
+  final int total;
+
+  const _GroupRow(this.name, this.counted, this.total);
+}
+
 class _LocationHeader extends StatelessWidget {
   final String name;
-  final int count;
+  final int counted;
+  final int total;
 
-  const _LocationHeader({required this.name, required this.count});
+  const _LocationHeader({
+    required this.name,
+    required this.counted,
+    required this.total,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.only(top: 12, bottom: 8),
+      padding: const EdgeInsets.only(top: 14, bottom: 8),
       child: Row(
         children: [
           const Icon(Icons.place, size: 16, color: AppColors.primary),
           const SizedBox(width: 6),
           Expanded(child: Text(name, style: AppTextStyles.bodyBold)),
-          Text('$count barang', style: AppTextStyles.caption),
+          Text('$counted/$total', style: AppTextStyles.caption),
         ],
       ),
     );
