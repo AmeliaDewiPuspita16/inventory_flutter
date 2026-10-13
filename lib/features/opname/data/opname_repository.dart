@@ -2,6 +2,7 @@ import '../../../core/network/api_client.dart';
 import '../../../core/network/api_config.dart';
 import '../../../core/network/api_exception.dart';
 import '../domain/entities/opname_item.dart';
+import '../domain/entities/opname_record.dart';
 
 /// Pintu masuk fitur stock opname: tahu endpoint dan bentuk datanya,
 /// tidak tahu soal tampilan.
@@ -51,6 +52,56 @@ class OpnameRepository {
     }
     return racks;
   }
+
+  /// Satu halaman riwayat opname. [status] null = semua status.
+  Future<OpnamePage> fetchHistory({
+    OpnameStatus? status,
+    int page = 1,
+    int perPage = 20,
+  }) async {
+    final query = <String, String>{
+      if (status == OpnameStatus.draft) 'status': 'draft',
+      if (status == OpnameStatus.confirmed) 'status': 'confirmed',
+      'page': '$page',
+      'per_page': '$perPage',
+    };
+    // Dipakai getEnvelope karena info halaman (`meta`) ada di samping `data`.
+    final envelope = await _apiClient.getEnvelope(
+      '${ApiConfig.opnameBase}?${Uri(queryParameters: query).query}',
+    );
+    try {
+      final data = envelope['data'] as List;
+      final meta = envelope['meta'];
+      return OpnamePage(
+        items: [
+          for (final row in data)
+            OpnameSummary.fromJson(Map<String, dynamic>.from(row as Map)),
+        ],
+        currentPage: meta is Map ? (_asInt(meta['current_page']) ?? page) : page,
+        lastPage: meta is Map ? (_asInt(meta['last_page']) ?? page) : page,
+      );
+    } on FormatException catch (_) {
+      throw _unreadable;
+    } on TypeError catch (_) {
+      throw _unreadable;
+    }
+  }
+
+  /// Isi lengkap satu opname beserta baris-barisnya.
+  Future<OpnameDetail> fetchDetail(int id) async {
+    final data = await _apiClient.get('${ApiConfig.opnameBase}/$id');
+    try {
+      return OpnameDetail.fromJson(data);
+    } on FormatException catch (_) {
+      throw _unreadable;
+    } on TypeError catch (_) {
+      throw _unreadable;
+    }
+  }
+
+  static const _unreadable = ApiException.server(
+    'Data opname dari server tidak dikenali. Hubungi tim IT.',
+  );
 
   /// Mengirim hasil hitungan ke server dan mengembalikan id opname-nya.
   ///

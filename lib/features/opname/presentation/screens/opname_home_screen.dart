@@ -14,6 +14,7 @@ import '../widgets/home_guide_card.dart';
 import '../widgets/home_header_content.dart';
 import '../widgets/home_start_button.dart';
 import 'opname_count_screen.dart';
+import 'opname_history_screen.dart';
 
 /// Halaman pertama: header abu-hijau, tombol scan bulat di tengah,
 /// lalu panduan 4 langkah. Satu ketukan membuka kamera.
@@ -52,11 +53,18 @@ class _OpnameHomeScreenState extends State<OpnameHomeScreen> {
     if (mounted) _loadCounts();
   }
 
+  void _openHistory(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const OpnameHistoryScreen()),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final itemCount = _items.length;
     final rackCount = _items.map((e) => e.location).toSet().length;
-    
+
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: HeroHeader.overlayStyle,
       child: Scaffold(
@@ -74,6 +82,7 @@ class _OpnameHomeScreenState extends State<OpnameHomeScreen> {
                       child: HomeHeaderContent(
                         itemCount: itemCount,
                         rackCount: rackCount,
+                        onHistoryTap: () => _openHistory(context),
                         onLogoutConfirmed: () => context
                             .read<AuthBloc>()
                             .add(const AuthLogoutRequested()),
