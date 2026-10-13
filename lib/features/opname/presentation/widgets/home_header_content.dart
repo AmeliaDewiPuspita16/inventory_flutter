@@ -10,12 +10,14 @@ class HomeHeaderContent extends StatelessWidget {
   final int itemCount;
   final int rackCount;
   final VoidCallback onLogoutConfirmed;
+  final VoidCallback onHistoryTap;
 
   const HomeHeaderContent({
     super.key,
     required this.itemCount,
     required this.rackCount,
     required this.onLogoutConfirmed,
+    required this.onHistoryTap,
   });
 
   @override
@@ -60,7 +62,21 @@ class HomeHeaderContent extends StatelessWidget {
         ),
         Padding(
           padding: const EdgeInsets.only(top: 4),
-          child: LogoutButton(onConfirmed: onLogoutConfirmed),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                tooltip: 'Riwayat opname',
+                onPressed: onHistoryTap,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                icon: const Icon(Icons.history_rounded,
+                    color: AppColors.primary),
+              ),
+              const SizedBox(width: 16),
+              LogoutButton(onConfirmed: onLogoutConfirmed),
+            ],
+          ),
         ),
       ],
     );

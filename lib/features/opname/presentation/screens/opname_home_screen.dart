@@ -8,29 +8,62 @@ import '../../../../core/widgets/hero_header.dart';
 import '../../../../core/widgets/scan_badge.dart';
 import '../../../auth/presentation/bloc/auth/auth_bloc.dart';
 import '../../../auth/presentation/bloc/auth/auth_event.dart';
-import '../../data/dummy/opname_dummy.dart';
+import '../../data/opname_repository.dart';
+import '../../domain/entities/opname_item.dart';
 import '../widgets/home_guide_card.dart';
 import '../widgets/home_header_content.dart';
 import '../widgets/home_start_button.dart';
 import 'opname_count_screen.dart';
+import 'opname_history_screen.dart';
 
 /// Halaman pertama: header abu-hijau, tombol scan bulat di tengah,
 /// lalu panduan 4 langkah. Satu ketukan membuka kamera.
 /// Layar ini hanya menyusun widget; isi tiap bagian ada di widgets/home_*.dart.
-class OpnameHomeScreen extends StatelessWidget {
+class OpnameHomeScreen extends StatefulWidget {
   const OpnameHomeScreen({super.key});
 
-  void _start(BuildContext context) {
-    Navigator.push(
+  @override
+  State<OpnameHomeScreen> createState() => _OpnameHomeScreenState();
+}
+
+class _OpnameHomeScreenState extends State<OpnameHomeScreen> {
+  List<OpnameItem> _items = const [];
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCounts();
+  }
+
+  /// Hanya untuk angka di header. Kalau gagal, angka tetap 0 dan layar
+  /// hitung akan menampilkan galatnya sendiri dengan tombol coba lagi.
+  Future<void> _loadCounts() async {
+    try {
+      final items = await context.read<OpnameRepository>().fetchCountableItems();
+      if (mounted) setState(() => _items = items);
+    } catch (_) {}
+  }
+
+  Future<void> _start(BuildContext context) async {
+    await Navigator.push(
       context,
       MaterialPageRoute(builder: (_) => const OpnameCountScreen()),
+    );
+    // Setelah kembali, stok mungkin berubah (hitungan baru dikirim).
+    if (mounted) _loadCounts();
+  }
+
+  void _openHistory(BuildContext context) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const OpnameHistoryScreen()),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final itemCount = dummyOpnameItems.length;
-    final rackCount = dummyOpnameItems.map((e) => e.location).toSet().length;
+    final itemCount = _items.length;
+    final rackCount = _items.map((e) => e.location).toSet().length;
 
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: HeroHeader.overlayStyle,
@@ -49,6 +82,7 @@ class OpnameHomeScreen extends StatelessWidget {
                       child: HomeHeaderContent(
                         itemCount: itemCount,
                         rackCount: rackCount,
+                        onHistoryTap: () => _openHistory(context),
                         onLogoutConfirmed: () => context
                             .read<AuthBloc>()
                             .add(const AuthLogoutRequested()),

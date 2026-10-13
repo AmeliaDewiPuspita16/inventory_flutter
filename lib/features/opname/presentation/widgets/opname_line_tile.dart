@@ -6,15 +6,16 @@ import '../../../../core/widgets/app_card.dart';
 import '../../domain/entities/opname_item.dart';
 import 'difference_label.dart';
 
-/// Kartu barang di daftar rak.
+/// Kartu barang di daftar rak. Kalau [onEdit] null, kartu hanya untuk
+/// dibaca (tanpa tombol edit dan tidak bisa diketuk), mis. di detail riwayat.
 ///   Border: abu = belum dihitung, primary = sudah dihitung.
 ///   atas : ikon, kode, nama, tombol edit
 ///   bawah: Total (jumlah aktual), badge selisih +/-, dan stok sistem
 class OpnameLineTile extends StatelessWidget {
   final OpnameItem item;
-  final VoidCallback onEdit;
+  final VoidCallback? onEdit;
 
-  const OpnameLineTile({super.key, required this.item, required this.onEdit});
+  const OpnameLineTile({super.key, required this.item, this.onEdit});
 
   @override
   Widget build(BuildContext context) {
@@ -57,15 +58,16 @@ class OpnameLineTile extends StatelessWidget {
                     ],
                   ),
                 ),
-                IconButton(
-                  tooltip: 'Edit jumlah',
-                  onPressed: onEdit,
-                  style: IconButton.styleFrom(
-                    backgroundColor: AppColors.primarySoft,
+                if (onEdit != null)
+                  IconButton(
+                    tooltip: 'Edit jumlah',
+                    onPressed: onEdit,
+                    style: IconButton.styleFrom(
+                      backgroundColor: AppColors.primarySoft,
+                    ),
+                    icon: const Icon(Icons.edit_outlined,
+                        color: AppColors.primary, size: 20),
                   ),
-                  icon: const Icon(Icons.edit_outlined,
-                      color: AppColors.primary, size: 20),
-                ),
               ],
             ),
           ),
