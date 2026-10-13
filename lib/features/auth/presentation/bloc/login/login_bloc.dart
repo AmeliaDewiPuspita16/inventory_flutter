@@ -11,9 +11,8 @@ import 'login_state.dart';
 /// Berumur pendek — hidup bersama LoginScreen. Status sesi jangka panjang
 /// dipegang AuthBloc.
 class LoginBloc extends Bloc<LoginEvent, LoginState> {
-  LoginBloc({required AuthRepository repository})
-      : _repository = repository,
-        super(const LoginState()) {
+  LoginBloc({required this._repository})
+      : super(const LoginState()) {
     on<LoginSubmitted>(_onSubmitted);
     on<LoginReset>(_onReset);
   }
