@@ -23,7 +23,7 @@ class BarcodeDecoration extends StatelessWidget {
         child: CustomPaint(
           size: Size(width, height),
           painter: _BarcodePainter(
-            color ?? AppColors.primary.withOpacity(0.10),
+            color ?? AppColors.primary.withValues(alpha: 0.10),
           ),
         ),
       ),

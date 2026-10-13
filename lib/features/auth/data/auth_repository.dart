@@ -8,10 +8,9 @@ import 'session_storage.dart';
 /// Pintu masuk fitur auth: tahu soal login dan sesi, tidak tahu soal HTTP.
 class AuthRepository {
   AuthRepository({
-    required ApiClient apiClient,
+    required this._apiClient,
     required SessionStorage storage,
-  })  : _apiClient = apiClient,
-        _storage = storage;
+  })  : _storage = storage;
 
   final ApiClient _apiClient;
   final SessionStorage _storage;

@@ -11,9 +11,8 @@ import 'auth_state.dart';
 /// Dipisah dari LoginBloc karena logout dan sesi kedaluwarsa bisa terjadi
 /// dari layar mana pun, jauh setelah LoginScreen ditutup.
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
-  AuthBloc({required AuthRepository repository})
-      : _repository = repository,
-        super(const AuthState.unknown()) {
+  AuthBloc({required this._repository})
+      : super(const AuthState.unknown()) {
     on<AuthStarted>(_onStarted);
     on<AuthSessionGranted>(_onSessionGranted);
     on<AuthUserRefreshed>(_onUserRefreshed);
